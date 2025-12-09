@@ -49,6 +49,7 @@ record Square(Location start, Location end, long size) implements Comparable<Squ
     }
 
     boolean tileIsOnEdge(Location tile){
+        // IO.println("isTileOnEdge: " + tile);
         if(tile.x == start.x || tile.x == end.x && tile.y == start.y || tile.y == end.y) {
             return true;
         }
@@ -98,6 +99,7 @@ void main() throws Exception {
     IO.println("xlines and ylines calculated");
     // Set<Location> fill = fill(width, height, xLines, yLines);
     // display(width, height, xLines, yLines, fill);
+    // display(width, height, xLines, yLines, Set.of());
 
     Square largestSquare = largestSquare(tiles, xLines, yLines);
     IO.println(largestSquare.size);
@@ -112,28 +114,65 @@ Square largestSquare(List<Location> tiles, Map<Integer, List<Line>> xLines, Map<
             squares.add(new Square(tiles.get(i), tiles.get(j), size));
         }
     }
-    SQUARES: while(!squares.isEmpty()){
+    IO.println("calculated "+ squares.size() + " squares");
+    while(!squares.isEmpty()){
         var square = squares.poll();
-        // display(square, xLines, yLines, Set.of());
         IO.println(square);
         var start = square.start;
         var end = square.end;
-        for (Location tile : tiles) {
+        if(tiles.stream().parallel().anyMatch(tile -> {
             if(square.tileIsInside(tile)){
-                continue SQUARES;
+                // IO.println("tileIsInside");
+                return true;
             }
             if(square.tileIsOnEdge(tile)) {
                 for (Direction dir : getLineDirectionsOfTile(tile, xLines, yLines)) {
                     var nextLoc = Location.add(tile, dir.vector);
                     if(square.tileIsInside(nextLoc)) {
-                        continue SQUARES;
+                        // IO.println("tileOnEdgePointsInside");
+                        return true;
                     }
                 }
             }
+            return false;
+        })) {
+            continue;
+        }
+        if(linesGoesThrougSquare(square, xLines, yLines)){
+            continue;
         }
         return square;
     }
     return null;
+}
+
+boolean linesGoesThrougSquare(Square square, Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines){
+    // IO.println("linesGoesThrougSquare(" + square);
+    for (int x = Math.min(square.start.x, square.end.x)+1; x < Math.max(square.start.x, square.end.x); x++) {
+        var lines = xLines.get(x);
+        if (lines == null) {
+            continue;
+        }
+        // IO.println("x: " + x + " lines: " + lines);
+        for (Line line : lines) {
+            if(Math.min(line.start.y, line.end.y) <= Math.min(square.start.y, square.end.y) && Math.max(line.start.y, line.end.y) >= Math.max(square.start.y, square.end.y)){
+                return true;
+            }
+        }
+    }
+    for (int y = Math.min(square.start.y, square.end.y)+1; y < Math.max(square.start.y, square.end.y); y++) {
+        var lines = yLines.get(y);
+        if (lines == null) {
+            continue;
+        }
+        // IO.println("y: " + y + " lines: " + lines);
+        for (Line line : lines) {
+            if(Math.min(line.start.x, line.end.x) <= Math.min(square.start.x, square.end.x) && Math.max(line.start.x, line.end.x) >= Math.max(square.start.x, square.end.x)){
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 List<Direction> getLineDirectionsOfTile(Location tile, Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines) {
