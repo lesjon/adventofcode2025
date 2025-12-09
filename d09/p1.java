@@ -15,9 +15,10 @@ void main() throws Exception {
         .toList();
 
     List<Line> lines = new ArrayList<>();
-    lines.add(new Line(squares.get(squres.size()-1), squares.get(0)));
+    lines.add(new Line(squares.get(squares.size()-1), squares.get(0)));
+    long largestSquare = 0;
     for (int i = 1; i < squares.size(); i++) {
-        lines.add(new Line(squares.get(i),squares.get(i-1)));
+        lines.add(new Line(squares.get(i), squares.get(i-1)));
 
         for (int j = i+1; j < squares.size(); j++) {
             long size = squares.get(i).size(squares.get(j));
