@@ -1,4 +1,4 @@
-final static boolean LOG = false;
+final static boolean LOG = true;
 final static boolean DISPLAY = false;
 final static String FILE = "input.txt";
 final static int SCALE = 1;
@@ -12,6 +12,12 @@ static void log(Object msg){
 record Location(int x, int y){
     long size(Location o){
         return (long)Math.abs(1+x-o.x)*(long)Math.abs(1+y-o.y);
+    }
+
+    Location magnitudeVectorTo(Location o){
+        int xDiff = o.x - x;
+        int yDiff = o.y - y;
+        return new Location(xDiff/ Math.abs(xDiff), yDiff/ Math.abs(yDiff));
     }
 
     static Location add(Location l, Location r){
@@ -107,6 +113,48 @@ record Square(Location start, Location end, long size) implements Comparable<Squ
     int minY(){
         return Math.min(start.y, end.y);
     }
+
+    boolean canFill(Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines){
+        log("canFill(");
+        Set<Location> toFlood = new HashSet<>();
+        for (int x = minX()+1; x < maxX(); x++) {
+            for (int y = minY()+1; y < maxY(); y++) {
+                toFlood.add(new Location(x,y));
+            }
+        }
+        // log("toFlood: " + toFlood.size());
+        Location floodStart = Location.add(start, start.magnitudeVectorTo(end));
+        Queue<Location> queue = new ArrayBlockingQueue<>(toFlood.size());
+        toFlood.remove(floodStart);
+        queue.add(floodStart);
+        while(!queue.isEmpty()){
+            Location current = queue.poll();
+            // log("current: " + current);
+            if(!tileIsInside(current)){
+                // log("!tileIsInside(current)");
+                continue;
+            }
+            List<Line> currentXLines = xLines.get(current.x);
+            if(currentXLines != null && currentXLines.stream().anyMatch(l -> l.contains(current))){
+                // log("currentXLines != null && currentXLines.stream().anyMatch(l -> l.contains(current))");
+                return false;
+            }
+            List<Line> currentYLines = yLines.get(current.y);
+            if(currentYLines != null && currentYLines.stream().anyMatch(l -> l.contains(current))){
+                // log("currentYLines != null && currentYLines.stream().anyMatch(l -> l.contains(current))");
+                return false;
+            }
+            for (Direction dir : List.of(Direction.UP, Direction.DOWN, Direction.LEFT,Direction.RIGHT)) {
+                var next = Location.add(current, dir.vector);
+                // log("next: " + next);
+                if(toFlood.remove(next)){
+                    // log("queue.add();");
+                    queue.add(next);
+                }
+            }
+        }
+        return toFlood.isEmpty();
+    }
 }
 
 enum Direction {
@@ -175,30 +223,34 @@ Square largestSquare(List<Location> tiles, Map<Integer, List<Line>> xLines, Map<
             continue;
         }
         display(square, new HashSet<>(tiles), xLines, yLines);
-        if(tiles.stream()
-            .filter(tile -> square.tileIsOnEdge(tile))
-            .anyMatch(tile -> {
-                log("tileIsOnEdge: " + tile);
-                for (Direction dir : getLineDirectionsOfTile(tile, xLines, yLines)) {
-                    log("dir: " + dir);
-                    var nextLoc = Location.add(tile, dir.vector);
-                    if(square.tileIsInside(nextLoc)) {
-                        log("tileOnEdgePointsInside: square: " + square + " tile: " + tile + " dir: " + dir + " nextLoc: " + nextLoc);
-                        return true;
-                    }
-                }
-                return false;
-        })) {
+        if(!square.canFill(xLines, yLines)){
             continue;
         }
-        if(square.linesGoesThrougSquare(xLines, yLines)){
-            log("linesGoesThrougSquare(" + square);
-            continue;
-        }
+        // if(tiles.stream()
+        //     .filter(tile -> square.tileIsOnEdge(tile))
+        //     .anyMatch(tile -> {
+        //         log("tileIsOnEdge: " + tile);
+        //         for (Direction dir : getLineDirectionsOfTile(tile, xLines, yLines)) {
+        //             log("dir: " + dir);
+        //             var nextLoc = Location.add(tile, dir.vector);
+        //             if(square.tileIsInside(nextLoc)) {
+        //                 log("tileOnEdgePointsInside: square: " + square + " tile: " + tile + " dir: " + dir + " nextLoc: " + nextLoc);
+        //                 return true;
+        //             }
+        //         }
+        //         return false;
+        // })) {
+        //     continue;
+        // }
+        // if(square.linesGoesThrougSquare(xLines, yLines)){
+        //     log("linesGoesThrougSquare(" + square);
+        //     continue;
+        // }
         return square;
     }
     throw new RuntimeException("Did not find any viable square");
 }
+
 
 
 List<Direction> getLineDirectionsOfTile(Location tile, Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines) {
