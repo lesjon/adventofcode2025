@@ -1,104 +1,98 @@
-static final boolean LOG = true;
+static final boolean LOG = false;
 static void log(Object msg) {
     if(LOG) IO.println(Objects.toString(msg));
 }
 
-record Button(List<Integer> wires){}
-
-record Machine(int[] joltages, List<Button> buttons, int[] presses) implements Comparable<Machine> {
-
-    public int compareTo(Machine o) {
-        return Long.compare(totalPresses()+totalJoltage(), o.totalPresses()+o.totalJoltage());
+record Machine(List<Integer> pos, List<int[]> buttons, int[] presses) implements Comparable<Machine> {
+    public int compareTo(Machine o){
+        return Long.compare(totalScore(), o.totalScore());
     }
 
-    long totalJoltage() {
-        return Arrays.stream(joltages).sum();
+    long totalScore() {
+        return totalPresses() + distanceToOrigin();
     }
-
     long totalPresses() {
-        return Arrays.stream(presses).sum();
-    }
-
-    Machine press(int button){
-        var buttonWires = buttons.get(button).wires;
-        int[] joltages = this.joltages.clone();
-        for (int wire : buttonWires) {
-            joltages[wire]--;
+        long total = 0;
+        for (int p : presses) {
+            total += p;
         }
-        int[] presses = this.presses.clone();
-        presses[button]++;
-        return new Machine(joltages, buttons, presses);
+        return total;
     }
 
-    public String toString() {
-        return String.format("Machine[joltages=%s, buttons=%s, presses=%s",  Arrays.toString(joltages), buttons.toString(), Arrays.toString(presses));
+    long distanceToOrigin() {
+        long total = 0;
+        for (int i = 0; i < pos.size(); i++) {
+            total += pos.get(i)*pos.get(i);
+        }
+        return total;
     }
 
     boolean overJoltage() {
-        for (int i = 0; i < joltages.length; i++) {
-            if(joltages[i] < 0) return true;
+        for (int i : pos) {
+            if(i < 0) return true;
         }
         return false;
     }
 
-    boolean overJoltage(int wire) {
-        return joltages[wire] < 0;
-    }
-
-    boolean joltagesZero() {
-        for (int i = 0; i < joltages.length; i++) {
-            if(joltages[i] != 0) return false;
+    Machine press(int button) {
+        List<Integer> newPos = new ArrayList<>(pos);
+        int[] buttonArray = buttons.get(button);
+        for (int i : buttonArray) {
+            newPos.set(i, pos.get(i)-1);
         }
-        return true;
-    }
-
-    public boolean equals(Object o) {
-        if(!(o instanceof Machine other)){
-            return false;
-        }
-        return Arrays.equals(presses, other.presses);
+        int[] newPresses = presses.clone();
+        newPresses[button]++;
+        return new Machine(List.copyOf(newPos), buttons, newPresses);
     }
 }
 
-Machine parse(String line) {
-    String[] parts = line.split(" ");
-    List<Button> buttons = new ArrayList<>();
-    for (int i = 1; i < parts.length-1; i++) {
-        assert parts[i].charAt(0) == '(';
-        String p = parts[i].substring(1, parts[i].length()-1);
-        var button = new Button(Arrays.stream(p.split(",")).map(Integer::parseInt).toList());
-        buttons.add(button);
-    }
-    var presses = new int[buttons.size()];
-
-    String[] joltageParts = parts[parts.length-1].substring(1, parts[parts.length-1].length()-1).split(",");
-    int[] joltages = Arrays.stream(joltageParts).mapToInt(s -> Integer.parseInt(s)).toArray();
-    return new Machine(joltages, buttons, presses);
-}
-
-long fewestButtonPresses(Machine machine){
-    log("fewestButtonPresses( " + machine);
+long fewestButtonPresses(Machine machine) {
+    log("fewestButtonPresses(" + machine);
     PriorityQueue<Machine> machines = new PriorityQueue<>();
-    Set<Machine> added = new HashSet<>();
-    Map<int[], Long> bests = new HashMap<>();
+    Map<List<Integer>, Long> gScore = new HashMap<>();
     machines.add(machine);
-    bests.put(machine.joltages, machine.totalPresses());
+    gScore.put(machine.pos, machine.totalPresses());
     while(!machines.isEmpty()) {
         var current = machines.poll();
-        if(current.joltagesZero()) {
+        log("current: " + current.pos + " cost: " + current.totalScore());
+        if(current.distanceToOrigin() == 0) {
             return current.totalPresses();
         }
         for (int i = 0; i < current.presses.length; i++) {
             Machine next = current.press(i);
             if(next.overJoltage()) continue;
-            if(bests.containsKey(next.joltages) && bests.get(next.joltages) < next.totalPresses()) {
+            if(gScore.containsKey(next.pos)/*  && gScore.get(next.pos) < next.totalPresses()*/) {
+                log("gScore of: " + next.pos + " was less then: "  + next.totalPresses());
                 continue;
             }
-            bests.put(next.joltages, next.totalPresses());
+            gScore.put(next.pos, next.totalPresses());
             machines.add(next);
         }
     }
     throw new IllegalStateException("No path to target found");
+}
+
+
+Machine parse(String line) {
+    String[] parts = line.split(" ");
+
+    String[] joltageParts = parts[parts.length-1].substring(1, parts[parts.length-1].length()-1).split(",");
+    List<Integer> joltages = Arrays.stream(joltageParts).map(s -> Integer.parseInt(s)).toList();
+
+    List<int[]> buttons = new ArrayList<>();
+    for (int i = 1; i < parts.length-1; i++) {
+        String p = parts[i].substring(1, parts[i].length()-1);
+        String[] indicesStrings = p.split(",");
+        int[] button = new int[indicesStrings.length];
+
+        for (int j = 0; j < indicesStrings.length; j++) {
+            button[j] = Integer.parseInt(indicesStrings[j]);
+        }
+        buttons.add(button);
+    }
+    var presses = new int[buttons.size()];
+
+    return new Machine(joltages, buttons, presses);
 }
 
 void main() throws Exception {
