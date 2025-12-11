@@ -1,105 +1,95 @@
 static final boolean LOG = false;
-static void log(Object msg) {
+static void log(Object msg){
     if(LOG) IO.println(Objects.toString(msg));
 }
 
-record Machine(List<Integer> pos, List<int[]> buttons, int[] presses) implements Comparable<Machine> {
-    public int compareTo(Machine o){
-        return Long.compare(totalScore(), o.totalScore());
-    }
+record Machine(List<Integer> target, List<int[]> buttons, int presses) implements Comparable<Machine> {
 
-    long totalScore() {
-        return totalPresses() + distanceToOrigin();
-    }
-    long totalPresses() {
-        long total = 0;
-        for (int p : presses) {
-            total += p;
-        }
-        return total;
-    }
-
-    long distanceToOrigin() {
-        long total = 0;
-        for (int i = 0; i < pos.size(); i++) {
-            total += pos.get(i)*pos.get(i);
-        }
-        return total;
-    }
-
-    boolean overJoltage() {
-        for (int i : pos) {
-            if(i < 0) return true;
-        }
-        return false;
-    }
-
-    Machine press(int button) {
-        List<Integer> newPos = new ArrayList<>(pos);
-        int[] buttonArray = buttons.get(button);
-        for (int i : buttonArray) {
-            newPos.set(i, pos.get(i)-1);
-        }
-        int[] newPresses = presses.clone();
-        newPresses[button]++;
-        return new Machine(List.copyOf(newPos), buttons, newPresses);
-    }
-}
-
-long fewestButtonPresses(Machine machine) {
-    log("fewestButtonPresses(" + machine);
-    PriorityQueue<Machine> machines = new PriorityQueue<>();
-    Map<List<Integer>, Long> gScore = new HashMap<>();
-    machines.add(machine);
-    gScore.put(machine.pos, machine.totalPresses());
-    while(!machines.isEmpty()) {
-        var current = machines.poll();
-        log("current: " + current.pos + " cost: " + current.totalScore());
-        if(current.distanceToOrigin() == 0) {
-            return current.totalPresses();
-        }
-        for (int i = 0; i < current.presses.length; i++) {
-            Machine next = current.press(i);
-            if(next.overJoltage()) continue;
-            if(gScore.containsKey(next.pos)/*  && gScore.get(next.pos) < next.totalPresses()*/) {
-                log("gScore of: " + next.pos + " was less then: "  + next.totalPresses());
-                continue;
+    static Machine parse(String line) {
+        String[] parts = line.split(" ");
+        String targetString = parts[parts.length-1].substring(1,parts[parts.length-1].length()-1);
+        List<Integer> target = Arrays.stream(targetString.split(",")) 
+            .map(Integer::parseInt)
+            .toList();
+        List<int[]> buttons = new ArrayList<>();
+        for (int i = 1; i < parts.length-1; i++) {
+            var buttonParts = parts[i].substring(1,parts[i].length()-1).split(",");
+            var buttonIndices = Arrays.stream(buttonParts).mapToInt(Integer::parseInt).toArray();
+            var button = new int[target.size()];
+            for (int buttonIndex : buttonIndices) {
+                button[buttonIndex] = 1;
             }
-            gScore.put(next.pos, next.totalPresses());
-            machines.add(next);
+            buttons.add(button);
         }
+        return new Machine(target, buttons, 0);
     }
-    throw new IllegalStateException("No path to target found");
-}
 
+    public String toString() {
+        return String.format("Machine[target=%s, buttons=%s", target, buttons.stream().map(Arrays::toString).toList());
+    }
 
-Machine parse(String line) {
-    String[] parts = line.split(" ");
+    long dist() {
+        return target.stream().mapToInt(i -> i*i).sum();
+    }
 
-    String[] joltageParts = parts[parts.length-1].substring(1, parts[parts.length-1].length()-1).split(",");
-    List<Integer> joltages = Arrays.stream(joltageParts).map(s -> Integer.parseInt(s)).toList();
+    public int compareTo(Machine o) {
+        return Long.compare(dist(), o.dist());
+    }
 
-    List<int[]> buttons = new ArrayList<>();
-    for (int i = 1; i < parts.length-1; i++) {
-        String p = parts[i].substring(1, parts[i].length()-1);
-        String[] indicesStrings = p.split(",");
-        int[] button = new int[indicesStrings.length];
+    boolean atOrigin() {
+        return target.stream().allMatch(i -> i==0);
+    }
 
-        for (int j = 0; j < indicesStrings.length; j++) {
-            button[j] = Integer.parseInt(indicesStrings[j]);
+    boolean overShoot() {
+        return target.stream().anyMatch(i -> i<0);
+    }
+
+    long solve() {
+        IO.println("solve");
+        var queue = new PriorityQueue<Machine>();
+        Set<List<Integer>> seen = new HashSet<>();
+        queue.add(this);
+        seen.add(this.target);
+        while(!queue.isEmpty()) {
+            var machine = queue.poll();
+            log(machine);
+            if(machine.atOrigin()){
+                return machine.presses;
+            }
+            for (int bi = 0; bi < buttons.size(); bi++) {
+                var next = machine.nextPress(bi);
+                if(seen.contains(next.target)){
+                    continue;
+                }
+                if(next.overShoot()) {
+                    log("overshoot");
+                    continue;
+                }
+                queue.add(next);
+                seen.add(next.target);
+                log("seen: " + seen);
+            }
         }
-        buttons.add(button);
+        throw new IllegalStateException("No path found");
     }
-    var presses = new int[buttons.size()];
 
-    return new Machine(joltages, buttons, presses);
+    Machine nextPress(int bi) {
+        var button = buttons.get(bi);
+        log("button: " + Arrays.toString(button));
+        var nextTarget = new ArrayList<>(target);
+        for (int i = 0; i < button.length; i++) {
+            nextTarget.set(i, target.get(i)- button[i]);
+        }
+        log("nextTarget: " + nextTarget);
+        return new Machine(nextTarget, buttons, 1+presses);
+    }
 }
 
 void main() throws Exception {
-    Stream<Machine> machines = Files.lines(Path.of("input.txt"))
-        .map(l -> parse(l));
-
-    long total = machines.mapToLong(machine -> fewestButtonPresses(machine)).peek(IO::println).sum();
-    IO.println(total);
-
+    var lines = Files.lines(Path.of("input.txt")).toList();
+    List<Machine> machines = new ArrayList<>();
+    for (String line : lines) {
+        machines.add(Machine.parse(line));
+    }
+    IO.println(machines.stream().mapToLong(Machine::solve).sum());
 }
