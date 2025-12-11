@@ -1,314 +1,119 @@
-final static boolean LOG = true;
-final static boolean DISPLAY = false;
-final static String FILE = "input.txt";
-final static int SCALE = 1;
+static final boolean LOG = true;
+static void log(Object msg) {
+    if(LOG) IO.println(Objects.toString(msg));
+}
 
-static void log(Object msg){
-    if (LOG) {
-        IO.println(Objects.toString(msg));
+record Point(long x, long y) {
+    static Point from(String line){
+        var parts = line.split(",");
+        return new Point(Long.parseLong(parts[0]), Long.parseLong(parts[1]));
     }
 }
 
-record Location(int x, int y){
-    long size(Location o){
-        return (long)Math.abs(1+x-o.x)*(long)Math.abs(1+y-o.y);
+record Line(Point start, Point end) {
+    boolean isXLine(){
+        return start.x == end.x;
     }
-
-    Location magnitudeVectorTo(Location o){
-        int xDiff = o.x - x;
-        int yDiff = o.y - y;
-        return new Location(xDiff/ Math.abs(xDiff), yDiff/ Math.abs(yDiff));
-    }
-
-    static Location add(Location l, Location r){
-        return new Location(l.x + r.x, l.y + r.y);
-    }
+    long maxX() { return Math.max(start.x, end.x); }
+    long minX() { return Math.min(start.x, end.x); }
+    long maxY() { return Math.max(start.y, end.y); }
+    long minY() { return Math.min(start.y, end.y); }
 }
 
-record Line(Location start, Location end){
-    boolean contains(Location target){
-        if(target.x == start.x){
-            if(start.y < target.y && target.y < end.y){
-                return true;
-            }
-            if(end.y < target.y && target.y < start.y){
-                return true;
+record Rectangle(Point start, Point end) implements Comparable<Rectangle> {
+    long size() {
+        return (maxX() - minX()+1)*(maxY() - minY()+1);
+    }
+
+    long maxX() { return Math.max(start.x, end.x); }
+    long minX() { return Math.min(start.x, end.x); }
+    long maxY() { return Math.max(start.y, end.y); }
+    long minY() { return Math.min(start.y, end.y); }
+
+    public int compareTo(Rectangle o) {
+        return -Long.compare(size(), o.size());
+    }
+    boolean linesCrossRectangle(Map<Long, List<Line>> xlines, Map<Long, List<Line>> ylines) {
+        for(long x = minX()+1; x < maxX(); x++) {
+            List<Line> candidates = xlines.get(x);
+            if(null == candidates) continue;
+            for(Line line : candidates) {
+                log("x candi: " + line);
+                if(xlineCrosses(line)) return true;
             }
         }
-        if(target.y == start.y){
-            if(start.x < target.x && target.x < end.x){
-                return true;
-            }
-            if(end.x < target.x && target.x < start.x){
-                return true;
-            }
-        }
-        return false;
-    }
-}
-
-record Square(Location start, Location end, long size) implements Comparable<Square> {
-    public int compareTo(Square o) {
-        return Long.compare(o.size, size);
-    }
-
-    boolean tileIsInside(Location tile){
-        if(tile.x > Math.min(start.x, end.x) && Math.max(start.x, end.x) > tile.x) {
-            if(tile.y > Math.min(start.y, end.y) && Math.max(start.y, end.y) > tile.y) {
-                return true;
+        for(long y = minY()+1; y < maxY(); y++) {
+            List<Line> candidates = ylines.get(y);
+            if(null == candidates) continue;
+            for(Line line : candidates) {
+                log("y candi: " + line);
+                if(ylineCrosses(line)) return true;
             }
         }
         return false;
     }
 
-    boolean tileIsOnEdge(Location tile){
-        log("isTileOnEdge: " + tile);
-        boolean tileIsOnX = minY() < tile.y && tile.y < maxY() && (tile.x == start.x || tile.x == end.x);
-        boolean tileIsOnY = minX() < tile.x && tile.x < maxX() && (tile.y == start.y || tile.y == end.y);
-        return tileIsOnX || tileIsOnY;
-    }
-
-    boolean linesGoesThrougSquare(Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines){
-        for (int x = Math.min(start.x, end.x)+1; x < Math.max(start.x, end.x); x++) {
-            var lines = xLines.get(x);
-            log("x: " + x + " " + lines);
-            if (lines == null) {
-                continue;
-            }
-            for (Line line : lines) {
-                var lineMinY = Math.min(line.start.y, line.end.y);
-                var lineMaxY = Math.max(line.start.y, line.end.y);
-                if(lineMinY < minY() && lineMaxY > maxY()){
-                    return true;
-                }
-            }
+    boolean ylineCrosses(Line line) {
+        log("ylineCrosses(" + line);
+        if(line.minX() <= minX() && line.maxX() >= minX()){
+            return true;
         }
-        for (int y = Math.min(start.y, end.y)+1; y < Math.max(start.y, end.y); y++) {
-            var lines = yLines.get(y);
-            log("y: " + y + " " + lines);
-            if (lines == null) {
-                continue;
-            }
-            for (Line line : lines) {
-                var lineMinX = Math.min(line.start.x, line.end.x);
-                var lineMaxX = Math.max(line.start.x, line.end.x);
-                if(lineMinX < minX() && lineMaxX > maxX()){
-                    return true;
-                }
-            }
+        if(line.minX() <= maxX() && line.maxX() >= maxX()){
+            return true;
         }
-        log("return false");
         return false;
     }
 
-    int maxX(){
-        return Math.max(start.x, end.x);
-    }
-    int minX(){
-        return Math.min(start.x, end.x);
-    }
-    int maxY(){
-        return Math.max(start.y, end.y);
-    }
-    int minY(){
-        return Math.min(start.y, end.y);
+    boolean xlineCrosses(Line line) {
+        log("xlineCrosses(" + line);
+        if(line.minY() <= minY() && line.maxY() >= minY()){
+            return true;
+        }
+        if(line.minY() <= maxY() && line.maxY() >= maxY()){
+            return true;
+        }
+        return false;
     }
 
-    boolean canFill(Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines){
-        log("canFill(");
-        Set<Location> toFlood = new HashSet<>();
-        for (int x = minX()+1; x < maxX(); x++) {
-            for (int y = minY()+1; y < maxY(); y++) {
-                toFlood.add(new Location(x,y));
-            }
-        }
-        // log("toFlood: " + toFlood.size());
-        Location floodStart = Location.add(start, start.magnitudeVectorTo(end));
-        Queue<Location> queue = new ArrayBlockingQueue<>(toFlood.size());
-        toFlood.remove(floodStart);
-        queue.add(floodStart);
-        while(!queue.isEmpty()){
-            Location current = queue.poll();
-            // log("current: " + current);
-            if(!tileIsInside(current)){
-                // log("!tileIsInside(current)");
-                continue;
-            }
-            List<Line> currentXLines = xLines.get(current.x);
-            if(currentXLines != null && currentXLines.stream().anyMatch(l -> l.contains(current))){
-                // log("currentXLines != null && currentXLines.stream().anyMatch(l -> l.contains(current))");
-                return false;
-            }
-            List<Line> currentYLines = yLines.get(current.y);
-            if(currentYLines != null && currentYLines.stream().anyMatch(l -> l.contains(current))){
-                // log("currentYLines != null && currentYLines.stream().anyMatch(l -> l.contains(current))");
-                return false;
-            }
-            for (Direction dir : List.of(Direction.UP, Direction.DOWN, Direction.LEFT,Direction.RIGHT)) {
-                var next = Location.add(current, dir.vector);
-                // log("next: " + next);
-                if(toFlood.remove(next)){
-                    // log("queue.add();");
-                    queue.add(next);
-                }
-            }
-        }
-        return toFlood.isEmpty();
-    }
-}
 
-enum Direction {
-    DOWN(new Location(0,1)), UP(new Location(0,-1)), LEFT(new Location(-1,0)), RIGHT(new Location(1,0));
-    private Direction(Location vector){
-        this.vector = vector;
-    }
-    Location vector;
 }
 
 void main() throws Exception {
-    List<Location> tiles = Files.lines(Path.of(FILE))
-        .map(s -> s.split(","))
-        .map(ss -> new Location(Integer.parseInt(ss[0])/SCALE, Integer.parseInt(ss[1])/SCALE))
+    var points = Files.lines(Path.of("test.txt"))
+        .map(Point::from)
         .toList();
-    log("tiles parsed");
-    int width = tiles.stream().mapToInt(l -> l.x).max().getAsInt();
-    int height = tiles.stream().mapToInt(l -> l.y).max().getAsInt();
-    log("width: " + width + " height: " + height);
-    Map<Integer, List<Line>> xLines = new HashMap<>();
-    Map<Integer, List<Line>> yLines = new HashMap<>();
-    for (int i = 1; i <= tiles.size(); i++) {
-        var line = new Line(tiles.get(i%tiles.size()), tiles.get(i-1));
-        int firstIndex = i % tiles.size();
-        if(tiles.get(firstIndex).x == tiles.get(i-1).x){
-            List<Line> currentList = new ArrayList<>();
-            currentList.add(line);
-            xLines.merge(tiles.get(i-1).x, currentList, (l,r) -> {
-                l.addAll(r);
-                return l;
-            });
-        }
-        if(tiles.get(firstIndex).y == tiles.get(i-1).y){
-            List<Line> currentList = new ArrayList<>();
-            currentList.add(line);
-            yLines.merge(tiles.get(i-1).y, currentList, (l,r) -> {
-                l.addAll(r);
-                return l;
-            });
-        }
-    }
-    log("xlines and ylines calculated");
-    // display(width, height, new HashSet<>(tiles), xLines, yLines);
-
-    Square largestSquare = largestSquare(tiles, xLines, yLines);
-    IO.println(largestSquare.size);
-    // display(largestSquare, new HashSet<>(tiles), xLines, yLines);
-}
-
-Square largestSquare(List<Location> tiles, Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines){
-    PriorityQueue<Square> squares = new PriorityQueue<>();
-    for (int i = 0; i < tiles.size(); i++) {
-        for (int j = i+1; j < tiles.size(); j++) {
-            long size = tiles.get(i).size(tiles.get(j));
-            squares.add(new Square(tiles.get(i), tiles.get(j), size));
-        }
-    }
-    log("calculated "+ squares.size() + " squares");
-    while(!squares.isEmpty()){
-        var square = squares.poll();
-        log("square: " + square);
-        log(square);
-        var start = square.start;
-        var end = square.end;
-        if(tiles.stream().parallel().anyMatch(tile -> square.tileIsInside(tile))) {
-            continue;
-        }
-        display(square, new HashSet<>(tiles), xLines, yLines);
-        if(!square.canFill(xLines, yLines)){
-            continue;
-        }
-        // if(tiles.stream()
-        //     .filter(tile -> square.tileIsOnEdge(tile))
-        //     .anyMatch(tile -> {
-        //         log("tileIsOnEdge: " + tile);
-        //         for (Direction dir : getLineDirectionsOfTile(tile, xLines, yLines)) {
-        //             log("dir: " + dir);
-        //             var nextLoc = Location.add(tile, dir.vector);
-        //             if(square.tileIsInside(nextLoc)) {
-        //                 log("tileOnEdgePointsInside: square: " + square + " tile: " + tile + " dir: " + dir + " nextLoc: " + nextLoc);
-        //                 return true;
-        //             }
-        //         }
-        //         return false;
-        // })) {
-        //     continue;
-        // }
-        // if(square.linesGoesThrougSquare(xLines, yLines)){
-        //     log("linesGoesThrougSquare(" + square);
-        //     continue;
-        // }
-        return square;
-    }
-    throw new RuntimeException("Did not find any viable square");
-}
-
-
-
-List<Direction> getLineDirectionsOfTile(Location tile, Map<Integer, List<Line>> xLines, Map<Integer, List<Line>> yLines) {
-    List<Direction> result = new ArrayList<>();
-    var xline = xLines.get(tile.x).stream()
-        .filter(l -> l.start.y == tile.y || l.end.y == tile.y)
-        .findFirst().get();
-    assert 1 == xLines.get(tile.x).stream()
-        .filter(l -> l.start.y == tile.y || l.end.y == tile.y).count();
-    if(xline.start.y > tile.y || xline.end.y > tile.y){
-        result.add(Direction.DOWN);
-    }else{
-        result.add(Direction.UP);
-    }
-    var yline = yLines.get(tile.y).stream()
-        .filter(l -> l.start.x == tile.x || l.end.x == tile.x)
-        .findFirst().get();
-    assert 1 == yLines.get(tile.y).stream()
-        .filter(l -> l.start.x == tile.x || l.end.x == tile.x).count();
-    if(yline.start.x > tile.x || yline.end.x > tile.x){
-        result.add(Direction.RIGHT);
-    }else{
-        result.add(Direction.LEFT);
-    }
-    assert result.size() == 2;
-    return result;
-}
-
-void display(Square square, Set<Location> tiles, Map<Integer, List<Line>> xlines, Map<Integer, List<Line>> ylines){
-    int minX = Math.min(square.start.x, square.end.x);
-    int maxX = Math.max(square.start.x, square.end.x);
-    int minY = Math.min(square.start.y, square.end.y);
-    int maxY = Math.max(square.start.y, square.end.y);
-    display(minX, minY, maxX, maxY, tiles, xlines, ylines);
-}
-
-void display(int endX, int endY, Set<Location> tiles, Map<Integer, List<Line>> xlines, Map<Integer, List<Line>> ylines){
-    display(0, 0, endX, endY, tiles, xlines, ylines);
-}
-
-void display(int startX, int startY, int endX, int endY, Set<Location> tiles, Map<Integer, List<Line>> xlines, Map<Integer, List<Line>> ylines){
-    if(!DISPLAY) return;
-    var sb = new StringBuilder();
-    for (int y = startY; y <= endY; y++) {
-        for (int x = startX; x <= endX; x++) {
-            var target = new Location(x,y);
-            if(xlines.getOrDefault(target.x, List.of()).stream().anyMatch(l -> l.contains(target))){
-                sb.append('X');
-            } else if(ylines.getOrDefault(target.y, List.of()).stream().anyMatch(l -> l.contains(target))){
-                sb.append('Y');
-            }else if(tiles.contains(target)){
-                sb.append('#');
+    log("Parsed points: " + points);
+    Map<Long, List<Line>> xlines = new HashMap<>();
+    Map<Long, List<Line>> ylines = new HashMap<>();
+    PriorityQueue<Rectangle> queue = new PriorityQueue<>();
+    for(int i = 0; i < points.size(); i++) {
+        var line = new Line(points.get(i), points.get((i+1)%points.size()));
+        if(line.isXLine()) {
+            if(xlines.containsKey(line.start.x)) {
+                xlines.get(line.start.x).add(line);
             } else {
-                sb.append('.');
+                xlines.put(line.start.x, new ArrayList<>(List.of(line)));
+            }
+        } else {
+            if(ylines.containsKey(line.start.y)) {
+                ylines.get(line.start.y).add(line);
+            } else {
+                ylines.put(line.start.y, new ArrayList<>(List.of(line)));
             }
         }
-        sb.append('\n');
+        for(int j = i+1; j < points.size(); j++) {
+            queue.add(new Rectangle(points.get(i), points.get(j)));
+        }
     }
-    IO.print(sb.toString());
-}
+    log("queue: " + queue);
 
+    while(!queue.isEmpty()){
+        var rect = queue.poll();
+        log(rect);
+        if(!rect.linesCrossRectangle(xlines,ylines)) {
+            IO.println(rect.size());
+            return;
+        }
+    }
+
+}
