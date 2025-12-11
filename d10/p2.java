@@ -99,7 +99,7 @@ void main() throws Exception {
     Stream<Machine> machines = Files.lines(Path.of("input.txt"))
         .map(l -> parse(l));
 
-    long total = machines.parallel().mapToLong(machine -> fewestButtonPresses(machine)).peek(IO::println).sum();
+    long total = machines.mapToLong(machine -> fewestButtonPresses(machine)).peek(IO::println).sum();
     IO.println(total);
 
 }
